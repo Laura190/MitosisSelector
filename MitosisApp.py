@@ -87,14 +87,14 @@ class miApp(QWidget):
         self.grid.addWidget(self.pwEdt, 2, 1, 1, 3)
         self.grid.addWidget(serverLbl, 3, 0, 1, 0)
         self.grid.addWidget(self.serverEdt, 3, 1, 1, 3)
-        self.grid.addWidget(self.progress, 1, 4, 1, 5)
-        self.grid.addWidget(self.progressLbl, 2, 4, 1, 5)
+        self.grid.addWidget(self.progress, 2, 4, 1, 5)
+        self.grid.addWidget(self.progressLbl, 3, 4, 1, 5)
         self.grid.addWidget(runBtn, 4, 4, 1, 5)
         self.progress.hide()
         rows = self.createButtons()
-        self.grid.addWidget(self.selectionLbl, rows+1, 4, 1, 5)
-        self.grid.addWidget(nextBtn, rows+2, 4, 1, 5)
-        self.grid.addWidget(noMit, rows+2, 3, 1, 1)
+        self.grid.addWidget(self.selectionLbl, rows+4, 4, 1, 5)
+        self.grid.addWidget(nextBtn, rows+5, 4, 1, 5)
+        self.grid.addWidget(noMit, rows+5, 3, 1, 1)
 
     def showSettingsWindow(self):
         self.w = settingsWindow()
@@ -110,11 +110,13 @@ class miApp(QWidget):
         except FileNotFoundError:
             print('No results file found, redo processing for image %s'
                   % self.imageId)
-            raise
+        #    raise
         try:
             self.settings = pd.read_csv(localImages+"Settings.csv")
         except FileNotFoundError:
             print('No settings file found for image %s' % self.imageId)
+            self.settings = pd.read_csv("Settings.csv")
+            print(self.settings)
         self.buttonLbl = []
         self.buttons = []
         self.buttonSt = []
@@ -129,6 +131,7 @@ class miApp(QWidget):
                         self.totalCells.append(cellNo)
                         # List of all cells
         listOfFiles = self.listFilesPerCell()
+        print(not listOfFiles)
         if not listOfFiles:
             listOfFiles = list()
             listOfFiles.append('square_black.jpg')
@@ -202,6 +205,7 @@ class miApp(QWidget):
         self.replaceButtons()
 
     def listFilesPerCell(self):
+        print(self.totalCells)
         if self.totalCells:
             self.cell = self.totalCells[0]
             self.totalCells.remove(self.cell)
@@ -211,7 +215,7 @@ class miApp(QWidget):
                 if file.startswith(start) and file.endswith('.png'):
                     listOfFiles.append(os.path.join(self.root, file))
             return listOfFiles
-        else:
+        elif 'self.results' in locals():
             self.results.to_csv('Image_%s_Results.csv' % self.imageId,
                                 index=False)
             self.showOutputWindow()
@@ -220,6 +224,9 @@ class miApp(QWidget):
             #mbox.setDetailedText(self.results.to_string())
             #mbox.setStandardButtons(QMessageBox.Ok)
             #mbox.exec_()
+        else:
+            listOfFiles = []
+            return listOfFiles
 
     def showOutputWindow(self):
         self.w = outputWindow()
