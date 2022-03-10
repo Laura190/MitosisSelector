@@ -12,6 +12,8 @@ Assumes 2D+t or 3D+t image stacks, will skip images with only 1 time point.
 
 ## Installation
 
+Python 3.9
+
 Required packages:
 - omero-py
 - scikit-image
