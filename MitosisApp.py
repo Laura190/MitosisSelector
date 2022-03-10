@@ -259,7 +259,7 @@ class miApp(QWidget):
                                                                   self.serverEdt.text(),self.imageId,
                                                                   self.defaults['Channel'][0])
         box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
-        self.findROIs(maxPrj, sizeX, sizeY, box_size)
+        self.df = MitFunc.findROIs(self.df, maxPrj, sizeX, sizeY, box_size)
         self.progress.setValue(95)
         self.progressLbl.setText("Saving ROIs")
         self.progressLbl.repaint()
@@ -269,24 +269,7 @@ class miApp(QWidget):
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
 
-    def findROIs(self, maxPrj, sizeX, sizeY, box_size):
-        thresh = threshold_yen(maxPrj)
-        bw = closing(maxPrj > thresh, square(3))
-        cleared = clear_border(bw)
-        label_image = label(cleared)
-        for region in regionprops(label_image):
-            # take regions with large enough areas
-            if region.area >= 10:  # Approx diameter of bright spots
-                # draw rectangle around segmented cells
-                y0, x0 = region.centroid
-                # Ensure numbers aren't negative
-                minr = max(0, y0-float(box_size)/2)
-                minc = max(0, x0-float(box_size)/2)
-                maxr = min(sizeY, minr + box_size)
-                maxc = min(sizeX, minc + box_size)
-                self.df = self.df.concat({'x0': int(minc), 'x1': int(maxc),
-                                          'y0': int(minr), 'y1': int(maxr)},
-                                         ignore_index=True)
+
 
     # helper function for creating an ROI and linking it to new shapes
     def create_roi(self, img, shapes):
@@ -338,19 +321,6 @@ class miApp(QWidget):
                                                                 k+startTime)
                 imsave(imName, plane)
         self.df.to_csv('tmp/Image_%s/Results.csv' % self.imageId, index=False)
-
-    def get_z_stack(self, img, c=0, t=0):
-        """
-        Convert OMERO image object to numpy array
-        Input: img  OMERO image object
-               c    number of colour channls
-               t    number of time steps
-        """
-        zct_list = [(z, c, t)
-                    for z in range(img.getSizeZ())]  # Set dimensions of image
-        pixels = img.getPrimaryPixels()
-        # Read in data one plane at a time
-        return np.array(list(pixels.getPlanes(zct_list)))
 
     def select(self, text, j):
         # j is button number

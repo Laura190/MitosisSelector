@@ -67,6 +67,25 @@ def pullOMERO(username,password,server,imageId,channel):
     except Exception as e:
         print(e)
 
+def findROIs(df, maxPrj, sizeX, sizeY, box_size):
+        # df dataframe to store results
+        thresh = threshold_yen(maxPrj)
+        bw = closing(maxPrj > thresh, square(3))
+        cleared = clear_border(bw)
+        label_image = label(cleared)
+        for region in regionprops(label_image):
+            # take regions with large enough areas
+            if region.area >= 10:  # Approx diameter of bright spots
+                # draw rectangle around segmented cells
+                y0, x0 = region.centroid
+                # Ensure numbers aren't negative
+                minr = max(0, y0-float(box_size)/2)
+                minc = max(0, x0-float(box_size)/2)
+                maxr = min(sizeY, minr + box_size)
+                maxc = min(sizeX, minc + box_size)
+                df = pd.concat([df,{'x0': int(minc), 'x1': int(maxc),'y0': int(minr), 'y1': int(maxr)}], ignore_index=True)
+        return df
+
 
 if __name__ == "__main__":
     username = str(input("Username:") or "public")
