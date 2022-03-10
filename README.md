@@ -19,6 +19,7 @@ Required packages:
 - scikit-image
 - pyqt5
 - pandas
+- tqdm
 
 ## Usage
 

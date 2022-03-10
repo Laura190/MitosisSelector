@@ -4,3 +4,4 @@ Dataset*
 Image_*
 *.csv
 *.npy
+__pycache__/

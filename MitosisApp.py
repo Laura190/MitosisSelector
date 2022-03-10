@@ -28,7 +28,8 @@ import pandas as pd
 import os.path
 import errno
 from shutil import copy
-
+# Mitosis functions
+import MitFunc
 
 class miApp(QWidget):
     def __init__(self):
@@ -66,7 +67,7 @@ class miApp(QWidget):
         setBtn.clicked.connect(self.showSettingsWindow)
         # Run Button
         runBtn = QPushButton('Run')
-        runBtn.clicked.connect(self.pullOmero)
+        runBtn.clicked.connect(self.processImage)
         # Next Button
         nextBtn = QPushButton('Next')
         nextBtn.clicked.connect(self.replaceButtons)
@@ -232,7 +233,7 @@ class miApp(QWidget):
         self.w = outputWindow()
         self.w.show()
 
-    def pullOmero(self):
+    def processImage(self):
         self.imageId = self.imageEdt.text()
         self.progress.show()
         self.progress.setValue(0)
@@ -254,52 +255,19 @@ class miApp(QWidget):
         self.df = pd.DataFrame(columns=colNames)
         self.progressLbl.setText("Connecting to OMERO...")
         self.progressLbl.repaint()
-        try:
-            with BlitzGateway(self.userEdt.text(), self.pwEdt.text(),
-                              host=self.serverEdt.text(), port='4064',
-                              secure=True) as conn:
-                self.progressLbl.setText("Connected to OMERO, processing...")
-                self.progressLbl.repaint()
-                image = conn.getObject('Image', self.imageId)
-                if image is None:
-                    self.progressLbl.setText(
-                        "Image %s not found, process ended" % self.imageId)
-                else:
-                    sizeT = image.getSizeT()
-                    sizeX = image.getSizeX()
-                    sizeY = image.getSizeY()
-                    p = image.getPrimaryPixels()._obj
-                    scaleX = p.getPhysicalSizeX().getValue()
-                    box_size = 2*np.ceil(
-                        self.defaults['Nuclei Diameter'][0]/scaleX)
-                    # If multiple time steps, create max projection for each time
-                    if sizeT > 1:
-                        for t in range(sizeT):
-                            self.progress.setValue(round(t*90/sizeT-1))
-                            zStack = self.get_z_stack(image,
-                                                      self.defaults['Channel'][0],
-                                                      t)
-                            if t == 0:
-                                maxZPrj = np.max(zStack, axis=0)
-                            else:
-                                maxZPrj = np.dstack(
-                                    [maxZPrj, np.max(zStack, axis=0)])
-                        maxPrj = np.max(maxZPrj, axis=2)
-                    np.save('maxPrj.npy', maxPrj)
-                    np.save('maxZPrj.npy', maxZPrj)
-                    # DataFrame for storing results
-                    self.findROIs(maxPrj, sizeX, sizeY, box_size)
-                    self.progress.setValue(95)
-                    self.progressLbl.setText("Saving ROIs")
-                    self.progressLbl.repaint()
-                    self.updateService = conn.getUpdateService()
-                    self.getRois(maxZPrj, image)
-                    self.progress.setValue(100)
-                    self.progressLbl.setText("Processing Finished")
-        except Exception as e:
-            print(e)
-            self.progressLbl.setText("Failed to connect to OMERO")
-            self.progressLbl.repaint()
+        sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = MitFunc.pullOMERO(self.userEdt.text(),self.pwEdt.text(),
+                                                                  self.serverEdt.text(),self.imageId,
+                                                                  self.defaults['Channel'][0])
+        box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
+        self.findROIs(maxPrj, sizeX, sizeY, box_size)
+        self.progress.setValue(95)
+        self.progressLbl.setText("Saving ROIs")
+        self.progressLbl.repaint()
+        with BlitzGateway(self.userEdt.text(), self.pwEdt.text(),host=self.serverEdt.text(), port='4064',secure=True) as conn:
+            self.updateService = conn.getUpdateService()
+            self.getRois(maxZPrj, image)
+        self.progress.setValue(100)
+        self.progressLbl.setText("Processing Finished")
 
     def findROIs(self, maxPrj, sizeX, sizeY, box_size):
         thresh = threshold_yen(maxPrj)
@@ -316,7 +284,7 @@ class miApp(QWidget):
                 minc = max(0, x0-float(box_size)/2)
                 maxr = min(sizeY, minr + box_size)
                 maxc = min(sizeX, minc + box_size)
-                self.df = self.df.append({'x0': int(minc), 'x1': int(maxc),
+                self.df = self.df.concat({'x0': int(minc), 'x1': int(maxc),
                                           'y0': int(minr), 'y1': int(maxr)},
                                          ignore_index=True)
 
@@ -394,7 +362,7 @@ class miApp(QWidget):
         else:
             frame = text.partition("Selected")[0]
             self.buttonLbl[j].setText(text)
-            self.selected.append(frame)
+            self.selected.concat(frame)
             self.selected.sort()
             self.buttonSt[j] = True
         if self.selected:
