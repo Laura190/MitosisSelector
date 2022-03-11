@@ -5,3 +5,10 @@ Image_*
 *.csv
 *.npy
 __pycache__/
+*.mp4
+*.ipynb
+*.ilp
+*.ipynb_checkpoints
+*.tiff
+*.gif
+
