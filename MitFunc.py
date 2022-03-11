@@ -110,5 +110,12 @@ if __name__ == "__main__":
     server = str(input("Server:") or "camdu.warwick.ac.uk")
     imageId = int(input("Image ID:") or "1000")
     channel = int(input("Channel:") or "0")
+    nucleiDiameter = int(input("Nuclei Diameter:") or "20")
+    stages = str(input("Mitosis stages") or "Anaphase,Prophase")
     results = pullOMERO(username, password, server, imageId, channel)
+    box_size = 2*np.ceil(nucleiDiameter/results[2])
+    colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
+    colNames = colNames + stages.split(',')
+    df = pd.DataFrame(columns=colNames)
+    df = findROIs(df, results[4], results[0], results[1], box_size)
     print(results)

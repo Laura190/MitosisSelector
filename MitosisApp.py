@@ -31,6 +31,7 @@ from shutil import copy
 # Mitosis functions
 import MitFunc
 
+
 class miApp(QWidget):
     def __init__(self):
         QWidget.__init__(self)
@@ -255,23 +256,22 @@ class miApp(QWidget):
         self.df = pd.DataFrame(columns=colNames)
         self.progressLbl.setText("Connecting to OMERO...")
         self.progressLbl.repaint()
-        sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = MitFunc.pullOMERO(self.userEdt.text(),self.pwEdt.text(),
-                                                                  self.serverEdt.text(),self.imageId,
-                                                                  self.defaults['Channel'][0])
+        sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = MitFunc.pullOMERO(
+            self.userEdt.text(), self.pwEdt.text(), self.serverEdt.text(),
+            self.imageId, self.defaults['Channel'][0])
         box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
         self.df = MitFunc.findROIs(self.df, maxPrj, sizeX, sizeY, box_size)
         self.progress.setValue(95)
         self.progressLbl.setText("Saving ROIs")
         self.progressLbl.repaint()
-        with BlitzGateway(self.userEdt.text(), self.pwEdt.text(),host=self.serverEdt.text(), port='4064',secure=True) as conn:
+        with BlitzGateway(self.userEdt.text(), self.pwEdt.text(), host=self.serverEdt.text(), port='4064', secure=True) as conn:
             self.updateService = conn.getUpdateService()
             self.getRois(maxZPrj, image)
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
 
-
-
     # helper function for creating an ROI and linking it to new shapes
+
     def create_roi(self, img, shapes):
         # create an ROI, link it to Image
         roi = omero.model.RoiI()
