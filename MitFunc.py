@@ -99,23 +99,25 @@ def findROIs(df, maxPrj, sizeX, sizeY, box_size):
             minc = max(0, x0-float(box_size)/2)
             maxr = min(sizeY, minr + box_size)
             maxc = min(sizeX, minc + box_size)
-            df = pd.concat([df, {'x0': int(minc), 'x1': int(maxc), 'y0': int(
-                  minr), 'y1': int(maxr)}], ignore_index=True)
+            comb = pd.DataFrame.from_dict([{'x0': int(minc), 'x1': int(maxc),
+                                           'y0': int(minr), 'y1': int(maxr)}])
+            df = pd.concat([df, comb])
     return df
 
 
 if __name__ == "__main__":
-    username = str(input("Username:") or "public")
+    username = str(input("Username: ") or "public")
     password = getpass()
-    server = str(input("Server:") or "camdu.warwick.ac.uk")
-    imageId = int(input("Image ID:") or "1000")
-    channel = int(input("Channel:") or "0")
-    nucleiDiameter = int(input("Nuclei Diameter:") or "20")
-    stages = str(input("Mitosis stages") or "Anaphase,Prophase")
-    results = pullOMERO(username, password, server, imageId, channel)
-    box_size = 2*np.ceil(nucleiDiameter/results[2])
+    server = str(input("Server: ") or "camdu.warwick.ac.uk")
+    imageId = int(input("Image ID: ") or "1000")
+    channel = int(input("Channel: ") or "0")
+    nucleiDiameter = int(input("Nuclei Diameter: ") or "20")
+    stages = str(input("Mitosis stages: ") or "Anaphase,Prophase")
+    sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = pullOMERO(
+        username, password, server, imageId, channel)
+    box_size = 2*np.ceil(nucleiDiameter/scaleX)
     colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
     colNames = colNames + stages.split(',')
     df = pd.DataFrame(columns=colNames)
-    df = findROIs(df, results[4], results[0], results[1], box_size)
-    print(results)
+    df = findROIs(df, maxPrj, sizeX, sizeY, box_size)
+    print(df)
