@@ -9,10 +9,11 @@ import omero
 from omero.gateway import BlitzGateway
 from omero.rtypes import rdouble, rstring
 # skimage
-from skimage.filters import threshold_yen
-from skimage.morphology import closing, square
+from skimage.filters import threshold_yen, median
+from skimage.morphology import closing, square, disk
 from skimage.segmentation import clear_border
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops, regionprops_table
+from skimage import util
 from skimage.io import imsave
 # PyQt
 import sys
@@ -160,9 +161,15 @@ class miApp(QWidget):
         return j
 
     def replaceButtons(self):
-        if self.selectionLbl.text() == "All stages selected" or "No mitosis":
+        (self.selectionLbl.text() == "All stages selected"
+         or self.selectionLbl.text() == "No mitosis")
+        if (self.selectionLbl.text() == "All stages selected" or self.selectionLbl.text() == "No mitosis"):
+            print(self.results.columns)
+            print(self.selectionLbl.text())
             for k, name in enumerate(self.results.columns[7:]):
+                print(k)
                 print(int(self.cell), name)
+                print(self.selected)
                 self.results.loc[self.results['Cell'] == int(self.cell),
                                  name] = float(self.selected[k].strip(' '))
             self.selected = []
@@ -265,6 +272,9 @@ class miApp(QWidget):
                     scaleX = p.getPhysicalSizeX().getValue()
                     box_size = 2*np.ceil(
                         self.defaults['Nuclei Diameter'][0]/scaleX)
+                    min_time = 1
+                    min_area = box_size/4
+                    min_eccentricity = 0.85
                     # If multiple time steps, create max projection for each time
                     if sizeT > 1:
                         for t in range(sizeT):
@@ -281,7 +291,8 @@ class miApp(QWidget):
                     np.save('maxPrj.npy', maxPrj)
                     np.save('maxZPrj.npy', maxZPrj)
                     # DataFrame for storing results
-                    self.findROIs(maxPrj, sizeX, sizeY, box_size)
+                    self.find_rois(maxZPrj, sizeX, sizeY, box_size,
+                                   min_time, min_area, min_eccentricity)
                     self.progress.setValue(95)
                     self.progressLbl.setText("Saving ROIs")
                     self.progressLbl.repaint()
@@ -294,24 +305,63 @@ class miApp(QWidget):
             self.progressLbl.setText("Failed to connect to OMERO")
             self.progressLbl.repaint()
 
-    def findROIs(self, maxPrj, sizeX, sizeY, box_size):
-        thresh = threshold_yen(maxPrj)
-        bw = closing(maxPrj > thresh, square(3))
-        cleared = clear_border(bw)
-        label_image = label(cleared)
-        for region in regionprops(label_image):
-            # take regions with large enough areas
-            if region.area >= 10:  # Approx diameter of bright spots
-                # draw rectangle around segmented cells
-                y0, x0 = region.centroid
-                # Ensure numbers aren't negative
-                minr = max(0, y0-float(box_size)/2)
-                minc = max(0, x0-float(box_size)/2)
-                maxr = min(sizeY, minr + box_size)
-                maxc = min(sizeX, minc + box_size)
-                self.df = self.df.append({'x0': int(minc), 'x1': int(maxc),
-                                          'y0': int(minr), 'y1': int(maxr)},
-                                         ignore_index=True)
+    def remove_close_points(self, coords, box_size):
+        # Ensure points are far enough apart
+        ind_coords = []
+        for p in coords:
+            if not ind_coords or ((p[0]-ind_coords[-1][0])**2 + (p[1]-ind_coords[-1][1])**2 + (p[2]-ind_coords[-1][2])**2)**.5 >= float(box_size):
+                ind_coords.append(p)
+        return ind_coords
+
+    def remove_close_regions(self, regions, box_size):
+        props = regionprops_table(regions, properties=('label', 'centroid'))
+        coords = list(
+            zip(props['centroid-0'], props['centroid-1'], props['centroid-2']))
+        for i in range(3):
+            coords.sort(key=lambda y: y[i])
+            coords = self.remove_close_points(coords, 120)
+        return coords
+
+    def filter_label_image_2d(self, image, box_size, min_area, min_eccentricity):
+        filtered_lab_image = np.zeros_like(image, dtype=int)
+        for step in range(image.shape[2]):
+            med = median(image[..., step])
+            thresh = threshold_yen(med)
+            bw = closing(med > thresh, square(3))
+            cleared = clear_border(bw)
+            label_image = label(cleared)
+            props_table = regionprops_table(label_image, med, properties=(
+                'label', 'area', 'eccentricity', 'major_axis_length'))
+            condition = (props_table['area'] > min_area) & (
+                props_table['eccentricity'] > min_eccentricity) & (props_table['major_axis_length'] < box_size)
+            input_labels = props_table['label']
+            output_labels = input_labels * condition
+            filtered_lab_image[..., step] = util.map_array(
+                label_image, input_labels, output_labels)
+        return filtered_lab_image
+
+    def filter_label_image_3d(self, image, min_time):
+        lab_im = label(image)
+        props = regionprops_table(lab_im, properties=('label', 'bbox'))
+        condition = (abs(props['bbox-5']-props['bbox-2']) > min_time)
+        input_labels = props['label']
+        output_labels = input_labels * condition
+        final_regions = util.map_array(lab_im, input_labels, output_labels)
+        return final_regions
+
+    def find_rois(self, maxZPrj, sizeX, sizeY, box_size, min_time, min_area, min_eccentricity):
+        filtered_lab_image = self.filter_label_image_2d(
+            maxZPrj, 120, box_size/4, 0.85)
+        final_regions = self.filter_label_image_3d(filtered_lab_image, 1)
+        coords = self.remove_close_regions(final_regions, box_size)
+        for p in coords:
+            # Ensure numbers aren't negative
+            minr = max(0, p[0]-float(box_size)/2)
+            minc = max(0, p[1]-float(box_size)/2)
+            maxr = min(sizeY, minr + box_size)
+            maxc = min(sizeX, minc + box_size)
+            self.df = self.df.append({'x0': int(minc), 'x1': int(
+                maxc), 'y0': int(minr), 'y1': int(maxr)}, ignore_index=True)
 
     # helper function for creating an ROI and linking it to new shapes
     def create_roi(self, img, shapes):
@@ -527,7 +577,7 @@ class outputWindow(QWidget):
         grid.addWidget(message, 0, 0, 1, 1)
         grid.addWidget(localSave, 1, 0, 1, 1)
         grid.addWidget(locSave, 1, 2, 1, 1)
-        grid.addWidget(seld.saveDir, 1, 1, 1, 1)
+        grid.addWidget(self.saveDir, 1, 1, 1, 1)
         grid.addWidget(omeroSave, 2, 0, 1, 1)
         grid.addWidget(permission, 3, 0, 1, 1)
         grid.addWidget(rmTmp, 3, 0, 1, 1)

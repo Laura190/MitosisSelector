@@ -4,3 +4,9 @@ Dataset*
 Image_*
 *.csv
 *.npy
+*.mp4
+*.ipynb
+*.ilp
+*.ipynb_checkpoints
+*.tiff
+*.gif
