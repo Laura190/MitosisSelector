@@ -93,7 +93,7 @@ def find_rois(df, maxPrj, sizeX, sizeY, box_size):
     bw = closing(maxPrj > thresh, square(3))
     cleared = clear_border(bw)
     label_image = label(cleared)
-    for region in regionprops(label_image):
+    for count, region in enumerate(regionprops(label_image)):
         # take regions with large enough areas
         if region.area >= 10:  # Approx diameter of bright spots
             # draw rectangle around segmented cells
@@ -103,7 +103,7 @@ def find_rois(df, maxPrj, sizeX, sizeY, box_size):
             minc = max(0, x0-float(box_size)/2)
             maxr = min(sizeY, minr + box_size)
             maxc = min(sizeX, minc + box_size)
-            comb = pd.DataFrame.from_dict([{'x0': int(minc), 'x1': int(maxc),
+            comb = pd.DataFrame.from_dict([{'Cell': int(count), 'x0': int(minc), 'x1': int(maxc),
                                            'y0': int(minr), 'y1': int(maxr)}])
             df = pd.concat([df, comb])
     return df
@@ -126,14 +126,14 @@ def save_rois_to_omero(df, username, password, server, imageId):
     with BlitzGateway(username, password, host=server, port='4064', secure=True) as conn:
         image = conn.getObject('Image', imageId)
         # for cell, corner in enumerate(corners):
-        for cell, corner in df.iterrows():
+        for roi in df.iterrows():
             # Create roi and push to OMERO
             rect = omero.model.RectangleI()
-            rect.x = rdouble(corner['x0'])
-            rect.y = rdouble(corner['y0'])
-            rect.width = rdouble(corner['x1']-corner['x0'])
-            rect.height = rdouble(corner['y1']-corner['y0'])
-            comment = 'Cell '+str(cell)
+            rect.x = rdouble(roi['x0'])
+            rect.y = rdouble(roi['y0'])
+            rect.width = rdouble(roi['x1']-roi['x0'])
+            rect.height = rdouble(roi['y1']-roi['y0'])
+            comment = 'Cell '+str(roi['Cell'])
             rect.textValue = rstring(comment)
             create_roi(conn, image, [rect])
 

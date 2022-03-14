@@ -261,15 +261,13 @@ class miApp(QWidget):
         self.progress.setValue(95)
         self.progressLbl.setText("Saving ROIs")
         self.progressLbl.repaint()
-        with BlitzGateway(self.userEdt.text(), self.pwEdt.text(), host=self.serverEdt.text(), port='4064', secure=True) as conn:
-            image = conn.getObject('Image', self.imageId)
-            self.getRois(maxZPrj, image)
+        MitFunc.save_rois_to_omero(self.df, self.userEdt.text(
+        ), self.pwEdt.text(), self.serverEdt.text(), self.imageId)
+        self.rois_to_pngs(maxZPrj, image)
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
 
-    def getRois(self, maxZPrj, img):
-        MitFunc.save_rois_to_omero(self.df, self.userEdt.text(
-        ), self.pwEdt.text(), self.serverEdt.text(), self.imageId)
+    def rois_to_pngs(self, maxZPrj, img):
         # Get time series for each cell and save frames as pngs
         for cell, corner in self.df.iterrows():
             roi = maxZPrj[int(corner['y0']):int(corner['y1']),
