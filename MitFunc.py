@@ -4,10 +4,11 @@ import omero
 from omero.gateway import BlitzGateway
 from omero.rtypes import rdouble, rstring
 # skimage
-from skimage.filters import threshold_yen
+from skimage.filters import threshold_yen, median
 from skimage.morphology import closing, square
 from skimage.segmentation import clear_border
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops, regionprops_table
+from skimage import util
 from skimage.io import imsave
 # Data
 import numpy as np
@@ -83,29 +84,67 @@ def pullOMERO(username, password, server, imageId, channel, stages):
         print(e)
 
 
-def find_rois(df, maxPrj, sizeX, sizeY, box_size):
-    """
-    Use a method to identify regions of interest. Create rectangles around
-    centroid, which are within the limits of the image
-    """
-    # df dataframe to store results
-    thresh = threshold_yen(maxPrj)
-    bw = closing(maxPrj > thresh, square(3))
-    cleared = clear_border(bw)
-    label_image = label(cleared)
-    for count, region in enumerate(regionprops(label_image)):
-        # take regions with large enough areas
-        if region.area >= 10:  # Approx diameter of bright spots
-            # draw rectangle around segmented cells
-            y0, x0 = region.centroid
-            # Ensure numbers aren't negative
-            minr = max(0, y0-float(box_size)/2)
-            minc = max(0, x0-float(box_size)/2)
-            maxr = min(sizeY, minr + box_size)
-            maxc = min(sizeX, minc + box_size)
-            comb = pd.DataFrame.from_dict([{'Cell': int(count), 'x0': int(minc), 'x1': int(maxc),
-                                           'y0': int(minr), 'y1': int(maxr)}])
-            df = pd.concat([df, comb])
+def remove_close_points(coords, box_size):
+    # Ensure points are far enough apart
+    ind_coords = []
+    for p in coords:
+        if not ind_coords or ((p[0]-ind_coords[-1][0])**2 + (p[1]-ind_coords[-1][1])**2 + (p[2]-ind_coords[-1][2])**2)**.5 >= float(box_size):
+            ind_coords.append(p)
+    return ind_coords
+
+
+def remove_close_regions(regions, box_size):
+    props = regionprops_table(regions, properties=('label', 'centroid'))
+    coords = list(
+        zip(props['centroid-0'], props['centroid-1'], props['centroid-2']))
+    for i in range(3):
+        coords.sort(key=lambda y: y[i])
+        coords = remove_close_points(coords, box_size)
+    return coords
+
+
+def filter_label_image_2d(image, box_size, min_area, min_eccentricity):
+    filtered_lab_image = np.zeros_like(image, dtype=int)
+    for step in range(image.shape[2]):
+        med = median(image[..., step])
+        thresh = threshold_yen(med)
+        bw = closing(med > thresh, square(3))
+        cleared = clear_border(bw)
+        label_image = label(cleared)
+        props_table = regionprops_table(label_image, med, properties=(
+            'label', 'area', 'eccentricity', 'major_axis_length'))
+        condition = (props_table['area'] > min_area) & (
+            props_table['eccentricity'] > min_eccentricity) & (props_table['major_axis_length'] < box_size)
+        input_labels = props_table['label']
+        output_labels = input_labels * condition
+        filtered_lab_image[..., step] = util.map_array(
+            label_image, input_labels, output_labels)
+    return filtered_lab_image
+
+
+def filter_label_image_3d(image, min_time):
+    lab_im = label(image)
+    props = regionprops_table(lab_im, properties=('label', 'bbox'))
+    condition = (abs(props['bbox-5']-props['bbox-2']) > min_time)
+    input_labels = props['label']
+    output_labels = input_labels * condition
+    final_regions = util.map_array(lab_im, input_labels, output_labels)
+    return final_regions
+
+
+def find_rois(df, maxZPrj, sizeX, sizeY, box_size, min_time, min_area, min_eccentricity):
+    filtered_lab_image = filter_label_image_2d(maxZPrj, box_size, min_area, min_eccentricity)
+    final_regions = filter_label_image_3d(filtered_lab_image, min_time)
+    coords = remove_close_regions(final_regions, box_size)
+    for count, p in enumerate(coords):
+        # Ensure numbers aren't negative
+        minr = max(0, p[0]-float(box_size)/2)
+        minc = max(0, p[1]-float(box_size)/2)
+        maxr = min(sizeY, minr + box_size)
+        maxc = min(sizeX, minc + box_size)
+        comb = pd.DataFrame.from_dict([{'Cell': int(count), 'x0': int(minc), 'x1': int(maxc),
+                                        'y0': int(minr), 'y1': int(maxr)}])
+        df = pd.concat([df, comb])
     return df
 
 
