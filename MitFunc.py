@@ -109,6 +109,19 @@ def findROIs(df, maxPrj, sizeX, sizeY, box_size):
     return df
 
 
+def create_roi(conn, img, shapes):
+    # helper function for creating an ROI and linking it to new shapes
+    updateService = conn.getUpdateService()
+    # create an ROI, link it to Image
+    roi = omero.model.RoiI()
+    # use the omero.model.ImageI that underlies the 'image' wrapper
+    roi.setImage(img._obj)
+    for shape in shapes:
+        roi.addShape(shape)
+    # Save the ROI (saves any linked shapes too)
+    return updateService.saveAndReturnObject(roi)
+
+
 if __name__ == "__main__":
     username = str(input("Username: ") or "public")
     password = getpass()

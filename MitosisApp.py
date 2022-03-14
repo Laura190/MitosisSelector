@@ -262,24 +262,12 @@ class miApp(QWidget):
         self.progressLbl.setText("Saving ROIs")
         self.progressLbl.repaint()
         with BlitzGateway(self.userEdt.text(), self.pwEdt.text(), host=self.serverEdt.text(), port='4064', secure=True) as conn:
-            self.updateService = conn.getUpdateService()
             image = conn.getObject('Image', self.imageId)
-            self.getRois(maxZPrj, image)
+            self.getRois(conn, maxZPrj, image)
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
 
-    # helper function for creating an ROI and linking it to new shapes
-    def create_roi(self, img, shapes):
-        # create an ROI, link it to Image
-        roi = omero.model.RoiI()
-        # use the omero.model.ImageI that underlies the 'image' wrapper
-        roi.setImage(img._obj)
-        for shape in shapes:
-            roi.addShape(shape)
-        # Save the ROI (saves any linked shapes too)
-        return self.updateService.saveAndReturnObject(roi)
-
-    def getRois(self, maxZPrj, img):
+    def getRois(self, conn, maxZPrj, img):
         # for cell, corner in enumerate(corners):
         for cell, corner in self.df.iterrows():
             roi = maxZPrj[int(corner['y0']):int(corner['y1']),
@@ -294,7 +282,7 @@ class miApp(QWidget):
             rect.textValue = rstring(comment)
             # rect.theZ = rint(z)
             # rect.theT = rint(t)
-            MitFunc.create_roi(img, [rect])
+            MitFunc.create_roi(conn, img, [rect])
             # Find the brighttest time in the Max Z projection stack
             maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
             maxTime = maxAtEachTime.index(max(maxAtEachTime))
