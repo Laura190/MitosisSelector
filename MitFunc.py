@@ -83,7 +83,7 @@ def pullOMERO(username, password, server, imageId, channel, stages):
         print(e)
 
 
-def findROIs(df, maxPrj, sizeX, sizeY, box_size):
+def find_rois(df, maxPrj, sizeX, sizeY, box_size):
     """
     Use a method to identify regions of interest. Create rectangles around
     centroid, which are within the limits of the image
@@ -122,6 +122,22 @@ def create_roi(conn, img, shapes):
     return updateService.saveAndReturnObject(roi)
 
 
+def save_rois_to_omero(df, username, password, server, imageId):
+    with BlitzGateway(username, password, host=server, port='4064', secure=True) as conn:
+        image = conn.getObject('Image', imageId)
+        # for cell, corner in enumerate(corners):
+        for cell, corner in df.iterrows():
+            # Create roi and push to OMERO
+            rect = omero.model.RectangleI()
+            rect.x = rdouble(corner['x0'])
+            rect.y = rdouble(corner['y0'])
+            rect.width = rdouble(corner['x1']-corner['x0'])
+            rect.height = rdouble(corner['y1']-corner['y0'])
+            comment = 'Cell '+str(cell)
+            rect.textValue = rstring(comment)
+            create_roi(conn, image, [rect])
+
+
 if __name__ == "__main__":
     username = str(input("Username: ") or "public")
     password = getpass()
@@ -133,5 +149,5 @@ if __name__ == "__main__":
     df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = pullOMERO(
         username, password, server, imageId, channel)
     box_size = 2*np.ceil(nucleiDiameter/scaleX)
-    df = findROIs(df, maxPrj, sizeX, sizeY, box_size)
+    df = find_rois(df, maxPrj, sizeX, sizeY, box_size)
     print(df)

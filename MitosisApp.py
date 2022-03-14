@@ -257,32 +257,23 @@ class miApp(QWidget):
             self.userEdt.text(), self.pwEdt.text(), self.serverEdt.text(),
             self.imageId, self.defaults['Channel'][0], self.defaults['Stages'][0])
         box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
-        self.df = MitFunc.findROIs(self.df, maxPrj, sizeX, sizeY, box_size)
+        self.df = MitFunc.find_rois(self.df, maxPrj, sizeX, sizeY, box_size)
         self.progress.setValue(95)
         self.progressLbl.setText("Saving ROIs")
         self.progressLbl.repaint()
         with BlitzGateway(self.userEdt.text(), self.pwEdt.text(), host=self.serverEdt.text(), port='4064', secure=True) as conn:
             image = conn.getObject('Image', self.imageId)
-            self.getRois(conn, maxZPrj, image)
+            self.getRois(maxZPrj, image)
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
 
-    def getRois(self, conn, maxZPrj, img):
-        # for cell, corner in enumerate(corners):
+    def getRois(self, maxZPrj, img):
+        MitFunc.save_rois_to_omero(self.df, self.userEdt.text(
+        ), self.pwEdt.text(), self.serverEdt.text(), self.imageId)
+        # Get time series for each cell and save frames as pngs
         for cell, corner in self.df.iterrows():
             roi = maxZPrj[int(corner['y0']):int(corner['y1']),
                           int(corner['x0']):int(corner['x1'])]
-            # Create roi and push to OMERO
-            rect = omero.model.RectangleI()
-            rect.x = rdouble(corner['x0'])
-            rect.y = rdouble(corner['y0'])
-            rect.width = rdouble(corner['x1']-corner['x0'])
-            rect.height = rdouble(corner['y1']-corner['y0'])
-            comment = 'Cell '+str(cell)
-            rect.textValue = rstring(comment)
-            # rect.theZ = rint(z)
-            # rect.theT = rint(t)
-            MitFunc.create_roi(conn, img, [rect])
             # Find the brighttest time in the Max Z projection stack
             maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
             maxTime = maxAtEachTime.index(max(maxAtEachTime))
@@ -301,9 +292,8 @@ class miApp(QWidget):
                 minusMin = plane - np.min(plane)
                 plane = (minusMin/np.max(minusMin)) * 255
                 plane = plane.astype(np.uint8)
-                imName = "tmp/Image_%s/Cell%04dTime%04d.png" % (self.imageId,
-                                                                cell,
-                                                                k+startTime)
+                imName = "tmp/Image_%s/Cell%04dTime%04d.png" % (
+                    self.imageId, cell, k+startTime)
                 imsave(imName, plane)
         self.df.to_csv('tmp/Image_%s/Results.csv' % self.imageId, index=False)
 
