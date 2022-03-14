@@ -133,7 +133,8 @@ def filter_label_image_3d(image, min_time):
 
 
 def find_rois(df, maxZPrj, sizeX, sizeY, box_size, min_time, min_area, min_eccentricity):
-    filtered_lab_image = filter_label_image_2d(maxZPrj, box_size, min_area, min_eccentricity)
+    filtered_lab_image = filter_label_image_2d(
+        maxZPrj, box_size, min_area, min_eccentricity)
     final_regions = filter_label_image_3d(filtered_lab_image, min_time)
     coords = remove_close_regions(final_regions, box_size)
     for count, p in enumerate(coords):

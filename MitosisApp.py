@@ -264,7 +264,8 @@ class miApp(QWidget):
             self.userEdt.text(), self.pwEdt.text(), self.serverEdt.text(),
             self.imageId, self.defaults['Channel'][0], self.defaults['Stages'][0])
         box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
-        self.df = MitFunc.find_rois(self.df, maxPrj, sizeX, sizeY, box_size)
+        self.df = MitFunc.find_rois(
+            self.df, maxZPrj, sizeX, sizeY, box_size, 1, 10, 0.85)
         self.progress.setValue(95)
         self.progressLbl.setText("Saving ROIs")
         self.progressLbl.repaint()
