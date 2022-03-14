@@ -29,6 +29,8 @@ import pandas as pd
 import os.path
 import errno
 from shutil import copy
+# Mitosis functions
+import MitFunc
 
 
 class miApp(QWidget):
@@ -67,7 +69,7 @@ class miApp(QWidget):
         setBtn.clicked.connect(self.showSettingsWindow)
         # Run Button
         runBtn = QPushButton('Run')
-        runBtn.clicked.connect(self.pullOmero)
+        runBtn.clicked.connect(self.processImage)
         # Next Button
         nextBtn = QPushButton('Next')
         nextBtn.clicked.connect(self.replaceButtons)
@@ -88,14 +90,14 @@ class miApp(QWidget):
         self.grid.addWidget(self.pwEdt, 2, 1, 1, 3)
         self.grid.addWidget(serverLbl, 3, 0, 1, 0)
         self.grid.addWidget(self.serverEdt, 3, 1, 1, 3)
-        self.grid.addWidget(self.progress, 1, 4, 1, 5)
-        self.grid.addWidget(self.progressLbl, 2, 4, 1, 5)
+        self.grid.addWidget(self.progress, 2, 4, 1, 5)
+        self.grid.addWidget(self.progressLbl, 3, 4, 1, 5)
         self.grid.addWidget(runBtn, 4, 4, 1, 5)
         self.progress.hide()
         rows = self.createButtons()
-        self.grid.addWidget(self.selectionLbl, rows+1, 4, 1, 5)
-        self.grid.addWidget(nextBtn, rows+2, 4, 1, 5)
-        self.grid.addWidget(noMit, rows+2, 3, 1, 1)
+        self.grid.addWidget(self.selectionLbl, rows+4, 4, 1, 5)
+        self.grid.addWidget(nextBtn, rows+5, 4, 1, 5)
+        self.grid.addWidget(noMit, rows+5, 3, 1, 1)
 
     def showSettingsWindow(self):
         self.w = settingsWindow()
@@ -111,11 +113,13 @@ class miApp(QWidget):
         except FileNotFoundError:
             print('No results file found, redo processing for image %s'
                   % self.imageId)
-            raise
+        #    raise
         try:
             self.settings = pd.read_csv(localImages+"Settings.csv")
         except FileNotFoundError:
             print('No settings file found for image %s' % self.imageId)
+            self.settings = pd.read_csv("Settings.csv")
+            print(self.settings)
         self.buttonLbl = []
         self.buttons = []
         self.buttonSt = []
@@ -130,6 +134,7 @@ class miApp(QWidget):
                         self.totalCells.append(cellNo)
                         # List of all cells
         listOfFiles = self.listFilesPerCell()
+        print(not listOfFiles)
         if not listOfFiles:
             listOfFiles = list()
             listOfFiles.append('square_black.jpg')
@@ -209,6 +214,7 @@ class miApp(QWidget):
         self.replaceButtons()
 
     def listFilesPerCell(self):
+        print(self.totalCells)
         if self.totalCells:
             self.cell = self.totalCells[0]
             self.totalCells.remove(self.cell)
@@ -218,7 +224,7 @@ class miApp(QWidget):
                 if file.startswith(start) and file.endswith('.png'):
                     listOfFiles.append(os.path.join(self.root, file))
             return listOfFiles
-        else:
+        elif 'self.results' in locals():
             self.results.to_csv('Image_%s_Results.csv' % self.imageId,
                                 index=False)
             self.showOutputWindow()
@@ -227,12 +233,15 @@ class miApp(QWidget):
             #mbox.setDetailedText(self.results.to_string())
             #mbox.setStandardButtons(QMessageBox.Ok)
             #mbox.exec_()
+        else:
+            listOfFiles = []
+            return listOfFiles
 
     def showOutputWindow(self):
         self.w = outputWindow()
         self.w.show()
 
-    def pullOmero(self):
+    def processImage(self):
         self.imageId = self.imageEdt.text()
         self.progress.show()
         self.progress.setValue(0)
@@ -249,183 +258,22 @@ class miApp(QWidget):
                 raise
         copy('Settings.csv', self.folder+'/Settings.csv')
         self.defaults = pd.read_csv(self.folder+'/Settings.csv')
-        colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
-        colNames = colNames + self.defaults['Stages'][0].split(',')
-        self.df = pd.DataFrame(columns=colNames)
         self.progressLbl.setText("Connecting to OMERO...")
         self.progressLbl.repaint()
-        try:
-            with BlitzGateway(self.userEdt.text(), self.pwEdt.text(),
-                              host=self.serverEdt.text(), port='4064',
-                              secure=True) as conn:
-                self.progressLbl.setText("Connected to OMERO, processing...")
-                self.progressLbl.repaint()
-                image = conn.getObject('Image', self.imageId)
-                if image is None:
-                    self.progressLbl.setText(
-                        "Image %s not found, process ended" % self.imageId)
-                else:
-                    sizeT = image.getSizeT()
-                    sizeX = image.getSizeX()
-                    sizeY = image.getSizeY()
-                    p = image.getPrimaryPixels()._obj
-                    scaleX = p.getPhysicalSizeX().getValue()
-                    box_size = 2*np.ceil(
-                        self.defaults['Nuclei Diameter'][0]/scaleX)
-                    min_time = 1
-                    min_area = box_size/4
-                    min_eccentricity = 0.85
-                    # If multiple time steps, create max projection for each time
-                    if sizeT > 1:
-                        for t in range(sizeT):
-                            self.progress.setValue(round(t*90/sizeT-1))
-                            zStack = self.get_z_stack(image,
-                                                      self.defaults['Channel'][0],
-                                                      t)
-                            if t == 0:
-                                maxZPrj = np.max(zStack, axis=0)
-                            else:
-                                maxZPrj = np.dstack(
-                                    [maxZPrj, np.max(zStack, axis=0)])
-                        maxPrj = np.max(maxZPrj, axis=2)
-                    np.save('maxPrj.npy', maxPrj)
-                    np.save('maxZPrj.npy', maxZPrj)
-                    # DataFrame for storing results
-                    self.find_rois(maxZPrj, sizeX, sizeY, box_size,
-                                   min_time, min_area, min_eccentricity)
-                    self.progress.setValue(95)
-                    self.progressLbl.setText("Saving ROIs")
-                    self.progressLbl.repaint()
-                    self.updateService = conn.getUpdateService()
-                    self.getRois(maxZPrj, image)
-                    self.progress.setValue(100)
-                    self.progressLbl.setText("Processing Finished")
-        except Exception as e:
-            print(e)
-            self.progressLbl.setText("Failed to connect to OMERO")
-            self.progressLbl.repaint()
-
-    def remove_close_points(self, coords, box_size):
-        # Ensure points are far enough apart
-        ind_coords = []
-        for p in coords:
-            if not ind_coords or ((p[0]-ind_coords[-1][0])**2 + (p[1]-ind_coords[-1][1])**2 + (p[2]-ind_coords[-1][2])**2)**.5 >= float(box_size):
-                ind_coords.append(p)
-        return ind_coords
-
-    def remove_close_regions(self, regions, box_size):
-        props = regionprops_table(regions, properties=('label', 'centroid'))
-        coords = list(
-            zip(props['centroid-0'], props['centroid-1'], props['centroid-2']))
-        for i in range(3):
-            coords.sort(key=lambda y: y[i])
-            coords = self.remove_close_points(coords, 120)
-        return coords
-
-    def filter_label_image_2d(self, image, box_size, min_area, min_eccentricity):
-        filtered_lab_image = np.zeros_like(image, dtype=int)
-        for step in range(image.shape[2]):
-            med = median(image[..., step])
-            thresh = threshold_yen(med)
-            bw = closing(med > thresh, square(3))
-            cleared = clear_border(bw)
-            label_image = label(cleared)
-            props_table = regionprops_table(label_image, med, properties=(
-                'label', 'area', 'eccentricity', 'major_axis_length'))
-            condition = (props_table['area'] > min_area) & (
-                props_table['eccentricity'] > min_eccentricity) & (props_table['major_axis_length'] < box_size)
-            input_labels = props_table['label']
-            output_labels = input_labels * condition
-            filtered_lab_image[..., step] = util.map_array(
-                label_image, input_labels, output_labels)
-        return filtered_lab_image
-
-    def filter_label_image_3d(self, image, min_time):
-        lab_im = label(image)
-        props = regionprops_table(lab_im, properties=('label', 'bbox'))
-        condition = (abs(props['bbox-5']-props['bbox-2']) > min_time)
-        input_labels = props['label']
-        output_labels = input_labels * condition
-        final_regions = util.map_array(lab_im, input_labels, output_labels)
-        return final_regions
-
-    def find_rois(self, maxZPrj, sizeX, sizeY, box_size, min_time, min_area, min_eccentricity):
-        filtered_lab_image = self.filter_label_image_2d(
-            maxZPrj, 120, box_size/4, 0.85)
-        final_regions = self.filter_label_image_3d(filtered_lab_image, 1)
-        coords = self.remove_close_regions(final_regions, box_size)
-        for p in coords:
-            # Ensure numbers aren't negative
-            minr = max(0, p[0]-float(box_size)/2)
-            minc = max(0, p[1]-float(box_size)/2)
-            maxr = min(sizeY, minr + box_size)
-            maxc = min(sizeX, minc + box_size)
-            self.df = self.df.append({'x0': int(minc), 'x1': int(
-                maxc), 'y0': int(minr), 'y1': int(maxr)}, ignore_index=True)
-
-    # helper function for creating an ROI and linking it to new shapes
-    def create_roi(self, img, shapes):
-        # create an ROI, link it to Image
-        roi = omero.model.RoiI()
-        # use the omero.model.ImageI that underlies the 'image' wrapper
-        roi.setImage(img._obj)
-        for shape in shapes:
-            roi.addShape(shape)
-        # Save the ROI (saves any linked shapes too)
-        return self.updateService.saveAndReturnObject(roi)
-
-    def getRois(self, maxZPrj, img):
-        # for cell, corner in enumerate(corners):
-        for cell, corner in self.df.iterrows():
-            roi = maxZPrj[int(corner['y0']):int(corner['y1']),
-                          int(corner['x0']):int(corner['x1'])]
-            # Create roi and push to OMERO
-            rect = omero.model.RectangleI()
-            rect.x = rdouble(corner['x0'])
-            rect.y = rdouble(corner['y0'])
-            rect.width = rdouble(corner['x1']-corner['x0'])
-            rect.height = rdouble(corner['y1']-corner['y0'])
-            comment = 'Cell '+str(cell)
-            rect.textValue = rstring(comment)
-            # rect.theZ = rint(z)
-            # rect.theT = rint(t)
-            self.create_roi(img, [rect])
-            # Find the brighttest time in the Max Z projection stack
-            maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
-            maxTime = maxAtEachTime.index(max(maxAtEachTime))
-            # Get substack, 20 is total number of time frames
-            startTime = max(0, maxTime-round(self.settings['Duration'][0]/2))
-            endTime = min(roi.shape[2], maxTime
-                          + round(self.settings['Duration'][0]/2))
-            substack = roi[:, :, startTime:endTime]
-            self.df.iloc[cell].at['Cell'] = cell
-            self.df.iloc[cell].at['t0'] = startTime
-            self.df.iloc[cell].at['t1'] = endTime
-            # Save each plane of substack as .png
-            for k in range(substack.shape[2]):
-                plane = substack[:, :, k]
-                # Rescale histogram of each plane
-                minusMin = plane - np.min(plane)
-                plane = (minusMin/np.max(minusMin)) * 255
-                plane = plane.astype(np.uint8)
-                imName = "tmp/Image_%s/Cell%04dTime%04d.png" % (self.imageId,
-                                                                cell,
-                                                                k+startTime)
-                imsave(imName, plane)
-        self.df.to_csv('tmp/Image_%s/Results.csv' % self.imageId, index=False)
-
-    def get_z_stack(self, img, c=0, t=0):
-        """
-        Convert OMERO image object to numpy array
-        Input: img  OMERO image object
-               c    number of colour channls
-               t    number of time steps
-        """
-        zct_list = [(z, c, t)
-                    for z in range(img.getSizeZ())]  # Set dimensions of image
-        pixels = img.getPrimaryPixels()
-        # Read in data one plane at a time
-        return np.array(list(pixels.getPlanes(zct_list)))
+        self.df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = MitFunc.pullOMERO(
+            self.userEdt.text(), self.pwEdt.text(), self.serverEdt.text(),
+            self.imageId, self.defaults['Channel'][0], self.defaults['Stages'][0])
+        box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
+        self.df = MitFunc.find_rois(self.df, maxPrj, sizeX, sizeY, box_size)
+        self.progress.setValue(95)
+        self.progressLbl.setText("Saving ROIs")
+        self.progressLbl.repaint()
+        MitFunc.save_rois_to_omero(self.df, self.userEdt.text(
+        ), self.pwEdt.text(), self.serverEdt.text(), self.imageId)
+        MitFunc.rois_to_pngs(
+            self.df, maxZPrj, self.settings['Duration'][0], self.imageId)
+        self.progress.setValue(100)
+        self.progressLbl.setText("Processing Finished")
 
     def select(self, text, j):
         # j is button number
@@ -437,7 +285,7 @@ class miApp(QWidget):
         else:
             frame = text.partition("Selected")[0]
             self.buttonLbl[j].setText(text)
-            self.selected.append(frame)
+            self.selected.concat(frame)
             self.selected.sort()
             self.buttonSt[j] = True
         if self.selected:
