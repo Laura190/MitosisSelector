@@ -178,18 +178,23 @@ def save_rois_to_omero(df, username, password, server, imageId):
             create_roi(conn, image, [rect])
 
 
+def get_frame_duration(roi, duration):
+    # Find the brighttest time in the Max Z projection stack
+    maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
+    maxTime = maxAtEachTime.index(max(maxAtEachTime))
+    # Get substack, 20 is total number of time frames
+    startTime = max(0, maxTime-round(duration))
+    endTime = min(roi.shape[2], maxTime + round(duration))
+    substack = roi[:, :, startTime:endTime]
+    return startTime, endTime, substack
+
+
 def rois_to_pngs(df, maxZPrj, duration, imageId):
     # Get time series for each cell and save frames as pngs
     for index, row in df.iterrows():
         roi = maxZPrj[int(row['y0']):int(row['y1']),
                       int(row['x0']):int(row['x1'])]
-        # Find the brighttest time in the Max Z projection stack
-        maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
-        maxTime = maxAtEachTime.index(max(maxAtEachTime))
-        # Get substack, 20 is total number of time frames
-        startTime = max(0, maxTime-round(duration))
-        endTime = min(roi.shape[2], maxTime + round(duration))
-        substack = roi[:, :, startTime:endTime]
+        startTime, endTime, substack = get_frame_duration(roi, duration)
         df.iloc[index].at['t0'] = startTime
         df.iloc[index].at['t1'] = endTime
         # Save each plane of substack as .png
