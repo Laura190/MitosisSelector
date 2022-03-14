@@ -251,14 +251,11 @@ class miApp(QWidget):
                 raise
         copy('Settings.csv', self.folder+'/Settings.csv')
         self.defaults = pd.read_csv(self.folder+'/Settings.csv')
-        colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
-        colNames = colNames + self.defaults['Stages'][0].split(',')
-        self.df = pd.DataFrame(columns=colNames)
         self.progressLbl.setText("Connecting to OMERO...")
         self.progressLbl.repaint()
-        sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = MitFunc.pullOMERO(
+        self.df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = MitFunc.pullOMERO(
             self.userEdt.text(), self.pwEdt.text(), self.serverEdt.text(),
-            self.imageId, self.defaults['Channel'][0])
+            self.imageId, self.defaults['Channel'][0], self.defaults['Stages'][0])
         box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
         self.df = MitFunc.findROIs(self.df, maxPrj, sizeX, sizeY, box_size)
         self.progress.setValue(95)
@@ -266,12 +263,12 @@ class miApp(QWidget):
         self.progressLbl.repaint()
         with BlitzGateway(self.userEdt.text(), self.pwEdt.text(), host=self.serverEdt.text(), port='4064', secure=True) as conn:
             self.updateService = conn.getUpdateService()
+            image = conn.getObject('Image', self.imageId)
             self.getRois(maxZPrj, image)
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
 
     # helper function for creating an ROI and linking it to new shapes
-
     def create_roi(self, img, shapes):
         # create an ROI, link it to Image
         roi = omero.model.RoiI()
@@ -297,7 +294,7 @@ class miApp(QWidget):
             rect.textValue = rstring(comment)
             # rect.theZ = rint(z)
             # rect.theT = rint(t)
-            self.create_roi(img, [rect])
+            MitFunc.create_roi(img, [rect])
             # Find the brighttest time in the Max Z projection stack
             maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
             maxTime = maxAtEachTime.index(max(maxAtEachTime))
@@ -472,7 +469,7 @@ class outputWindow(QWidget):
         grid.addWidget(message, 0, 0, 1, 1)
         grid.addWidget(localSave, 1, 0, 1, 1)
         grid.addWidget(locSave, 1, 2, 1, 1)
-        grid.addWidget(seld.saveDir, 1, 1, 1, 1)
+        grid.addWidget(self.saveDir, 1, 1, 1, 1)
         grid.addWidget(omeroSave, 2, 0, 1, 1)
         grid.addWidget(permission, 3, 0, 1, 1)
         grid.addWidget(rmTmp, 3, 0, 1, 1)

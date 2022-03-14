@@ -36,7 +36,7 @@ def get_z_stack(img, c=0, t=0):
     return np.array(list(pixels.getPlanes(zct_list)))
 
 
-def pullOMERO(username, password, server, imageId, channel):
+def pullOMERO(username, password, server, imageId, channel, stages):
     """
     Get image pixel and metadata from OMERO.
     Apply maximum projection in Z and in t
@@ -45,7 +45,11 @@ def pullOMERO(username, password, server, imageId, channel):
            server    str  Address of OMERO server
            imageId   int  OMERO ID of image to processing
            channel   int  Index of relevant channel
+           stages    str  Stages of mitosis to identify (separate with commas)
     """
+    colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
+    colNames = colNames + stages.split(',')
+    df = pd.DataFrame(columns=colNames)
     try:
         with BlitzGateway(username, password, host=server, port='4064', secure=True) as conn:
             message = "Connected to OMERO, processing..."
@@ -74,7 +78,7 @@ def pullOMERO(username, password, server, imageId, channel):
                     np.save('maxZPrj.npy', maxZPrj)
                 else:
                     message = "Image %s has only one time point, skipping processing" % imageId
-        return sizeX, sizeY, scaleX, maxPrj, maxZPrj, image
+        return df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image
     except Exception as e:
         print(e)
 
@@ -113,11 +117,8 @@ if __name__ == "__main__":
     channel = int(input("Channel: ") or "0")
     nucleiDiameter = int(input("Nuclei Diameter: ") or "20")
     stages = str(input("Mitosis stages: ") or "Anaphase,Prophase")
-    sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = pullOMERO(
+    df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = pullOMERO(
         username, password, server, imageId, channel)
     box_size = 2*np.ceil(nucleiDiameter/scaleX)
-    colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
-    colNames = colNames + stages.split(',')
-    df = pd.DataFrame(columns=colNames)
     df = findROIs(df, maxPrj, sizeX, sizeY, box_size)
     print(df)
