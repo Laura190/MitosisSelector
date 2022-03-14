@@ -126,7 +126,7 @@ def save_rois_to_omero(df, username, password, server, imageId):
     with BlitzGateway(username, password, host=server, port='4064', secure=True) as conn:
         image = conn.getObject('Image', imageId)
         # for cell, corner in enumerate(corners):
-        for roi in df.iterrows():
+        for index, roi in df.iterrows():
             # Create roi and push to OMERO
             rect = omero.model.RectangleI()
             rect.x = rdouble(roi['x0'])
@@ -136,6 +136,33 @@ def save_rois_to_omero(df, username, password, server, imageId):
             comment = 'Cell '+str(roi['Cell'])
             rect.textValue = rstring(comment)
             create_roi(conn, image, [rect])
+
+
+def rois_to_pngs(df, maxZPrj, duration, imageId):
+    # Get time series for each cell and save frames as pngs
+    for index, row in df.iterrows():
+        roi = maxZPrj[int(row['y0']):int(row['y1']),
+                      int(row['x0']):int(row['x1'])]
+        # Find the brighttest time in the Max Z projection stack
+        maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
+        maxTime = maxAtEachTime.index(max(maxAtEachTime))
+        # Get substack, 20 is total number of time frames
+        startTime = max(0, maxTime-round(duration))
+        endTime = min(roi.shape[2], maxTime + round(duration))
+        substack = roi[:, :, startTime:endTime]
+        df.iloc[index].at['t0'] = startTime
+        df.iloc[index].at['t1'] = endTime
+        # Save each plane of substack as .png
+        for k in range(substack.shape[2]):
+            plane = substack[:, :, k]
+            # Rescale histogram of each plane
+            minusMin = plane - np.min(plane)
+            plane = (minusMin/np.max(minusMin)) * 255
+            plane = plane.astype(np.uint8)
+            imName = "tmp/Image_%s/Cell%04dTime%04d.png" % (
+                imageId, index, k+startTime)
+            imsave(imName, plane)
+    df.to_csv('tmp/Image_%s/Results.csv' % imageId, index=False)
 
 
 if __name__ == "__main__":

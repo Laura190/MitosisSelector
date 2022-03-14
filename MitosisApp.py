@@ -263,37 +263,10 @@ class miApp(QWidget):
         self.progressLbl.repaint()
         MitFunc.save_rois_to_omero(self.df, self.userEdt.text(
         ), self.pwEdt.text(), self.serverEdt.text(), self.imageId)
-        self.rois_to_pngs(maxZPrj, image)
+        MitFunc.rois_to_pngs(
+            self.df, maxZPrj, self.settings['Duration'][0], self.imageId)
         self.progress.setValue(100)
         self.progressLbl.setText("Processing Finished")
-
-    def rois_to_pngs(self, maxZPrj, img):
-        # Get time series for each cell and save frames as pngs
-        for cell, corner in self.df.iterrows():
-            roi = maxZPrj[int(corner['y0']):int(corner['y1']),
-                          int(corner['x0']):int(corner['x1'])]
-            # Find the brighttest time in the Max Z projection stack
-            maxAtEachTime = [np.max(roi[:, :, i]) for i in range(roi.shape[2])]
-            maxTime = maxAtEachTime.index(max(maxAtEachTime))
-            # Get substack, 20 is total number of time frames
-            startTime = max(0, maxTime-round(self.settings['Duration'][0]/2))
-            endTime = min(roi.shape[2], maxTime
-                          + round(self.settings['Duration'][0]/2))
-            substack = roi[:, :, startTime:endTime]
-            self.df.iloc[cell].at['Cell'] = cell
-            self.df.iloc[cell].at['t0'] = startTime
-            self.df.iloc[cell].at['t1'] = endTime
-            # Save each plane of substack as .png
-            for k in range(substack.shape[2]):
-                plane = substack[:, :, k]
-                # Rescale histogram of each plane
-                minusMin = plane - np.min(plane)
-                plane = (minusMin/np.max(minusMin)) * 255
-                plane = plane.astype(np.uint8)
-                imName = "tmp/Image_%s/Cell%04dTime%04d.png" % (
-                    self.imageId, cell, k+startTime)
-                imsave(imName, plane)
-        self.df.to_csv('tmp/Image_%s/Results.csv' % self.imageId, index=False)
 
     def select(self, text, j):
         # j is button number
