@@ -190,6 +190,17 @@ def get_frame_duration(roi, duration):
 
 
 def rois_to_pngs(df, maxZPrj, duration, imageId):
+    try:
+        os.mkdir('tmp')
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+    folder = "tmp/Image_" + str(imageId)
+    try:
+        os.mkdir(folder)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
     # Get time series for each cell and save frames as pngs
     for index, row in df.iterrows():
         roi = maxZPrj[int(row['y0']):int(row['y1']),
@@ -218,8 +229,11 @@ if __name__ == "__main__":
     channel = int(input("Channel: ") or "0")
     nucleiDiameter = int(input("Nuclei Diameter: ") or "20")
     stages = str(input("Mitosis stages: ") or "Anaphase,Prophase")
+    duration = int(input("Duration: ") or "20")
     df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image = pullOMERO(
-        username, password, server, imageId, channel)
+        username, password, server, imageId, channel, stages)
     box_size = 2*np.ceil(nucleiDiameter/scaleX)
-    df = find_rois(df, maxPrj, sizeX, sizeY, box_size)
+    df = find_rois(df, maxZPrj, sizeX, sizeY, box_size, 1, 10, 0.85)
+    save_rois_to_omero(df,username,password,server,imageId)
+    rois_to_pngs(df, maxZPrj, duration, imageId)
     print(df)
