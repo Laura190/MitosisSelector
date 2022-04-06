@@ -4,21 +4,11 @@ CAMDU Mitosis Selector Application
 """
 
 # Packages
-# OMERO
-import omero
-from omero.gateway import BlitzGateway
-from omero.rtypes import rdouble, rstring
-# skimage
-from skimage.filters import threshold_yen
-from skimage.morphology import closing, square
-from skimage.segmentation import clear_border
-from skimage.measure import label, regionprops
-from skimage.io import imsave
 # PyQt
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QCheckBox
 from PyQt5.QtWidgets import QLabel, QLineEdit, QGridLayout, QProgressBar
-from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QFileDialog, QComboBox
 # from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtGui import QIntValidator, QIcon
 # Data
@@ -44,8 +34,16 @@ class miApp(QWidget):
         # OMERO user input
         imageLbl = QLabel()
         imageLbl.setText("Image ID:")
-        self.imageEdt = QLineEdit('%s' % defaultImage)
-        self.imageEdt.setValidator(QIntValidator())
+        self.imageEdt = QComboBox()
+        dir_list = [x for x in os.listdir("tmp") if not x.startswith('.')]
+        processed_images = []
+        for dir in dir_list:
+            processed_images.append(dir.split("Image_", 1)[1])
+        self.imageEdt.addItems(processed_images)
+        self.imageEdt.setEditable(True)
+        self.imageEdt.activated.connect(self.replaceButtons)
+        # self.imageEdt = QLineEdit('%s' % defaultImage)
+        # self.imageEdt.setValidator(QIntValidator())
         userLbl = QLabel()
         userLbl.setText("Username:")
         self.userEdt = QLineEdit()
@@ -105,7 +103,7 @@ class miApp(QWidget):
     def createButtons(self):
         # Image Buttons
         # grid = QGridLayout(self)
-        self.imageId = self.imageEdt.text()
+        self.imageId = self.imageEdt.currentText()
         localImages = "tmp/Image_%s/" % self.imageId
         try:
             self.results = pd.read_csv(localImages+"Results.csv")
