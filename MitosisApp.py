@@ -30,10 +30,13 @@ class miApp(QWidget):
         self.setWindowTitle('CAMDU Mitosis Selector')
         self.setWindowIcon(QIcon('square_black.jpg'))
         defaultServer = 'camdu.warwick.ac.uk'
-        defaultImage = 356978
+        imageLocal = QLabel()
+        imageLocal.setText("Local file path:")
+        browse = QPushButton('Browse')
+        browse.clicked.connect(self.getFile)
         # OMERO user input
         imageLbl = QLabel()
-        imageLbl.setText("Image ID:")
+        imageLbl.setText("OMERO Image ID:")
         self.imageEdt = QComboBox()
         dir_list = [x for x in os.listdir("tmp") if not x.startswith('.')]
         processed_images = []
@@ -41,7 +44,7 @@ class miApp(QWidget):
             processed_images.append(dir.split("Image_", 1)[1])
         self.imageEdt.addItems(processed_images)
         self.imageEdt.setEditable(True)
-        self.imageEdt.activated.connect(self.replaceButtons)
+        self.imageEdt.activated.connect(self.createButtons)
         # self.imageEdt = QLineEdit('%s' % defaultImage)
         # self.imageEdt.setValidator(QIntValidator())
         userLbl = QLabel()
@@ -78,6 +81,8 @@ class miApp(QWidget):
         self.selectionLbl.setText("Click image to select time frame")
         # Layout
         self.grid = QGridLayout(self)
+        self.grid.addWidget(imageLocal, 0, 4, 1, 1)
+        # self.grid.addWidget(browse, 0, 7, 1, 1)
         self.grid.addWidget(imageLbl, 0, 0, 1, 0)
         self.grid.addWidget(self.imageEdt, 0, 1, 1, 3)
         self.grid.addWidget(setBtn, 4, 0, 1, 2)
@@ -91,10 +96,16 @@ class miApp(QWidget):
         self.grid.addWidget(self.progressLbl, 3, 4, 1, 5)
         self.grid.addWidget(runBtn, 4, 4, 1, 5)
         self.progress.hide()
+        self.rerun = False
         rows = self.createButtons()
         self.grid.addWidget(self.selectionLbl, rows+4, 4, 1, 5)
         self.grid.addWidget(nextBtn, rows+5, 4, 1, 5)
         self.grid.addWidget(noMit, rows+5, 3, 1, 1)
+        self.grid.addWidget(browse, 0, 5, 1, 4)
+
+    def getFile(self):
+        self.file = str(QFileDialog.getOpenFileName())
+        print('process ', self.file)
 
     def showSettingsWindow(self):
         self.w = settingsWindow()
@@ -158,9 +169,39 @@ class miApp(QWidget):
             if (hpos == 0):
                 i += 2
             self.grid.addWidget(self.buttons[-1], i+6, hpos)
-            self.grid.addWidget(self.buttonLbl[-1], i+7, hpos)
+            if not self.rerun:
+                self.grid.addWidget(self.buttonLbl[-1], i+7, hpos)
         self.selected = []
+        # Save state that createButtons has already been run
+        self.rerun = True
         return j
+
+    def reset_all_buttons(self):
+        # reset all buttons
+        for j in range(len(self.buttonSt)):
+            self.buttonSt[j] = False
+        listOfFiles = self.listFilesPerCell()
+        if listOfFiles:
+            # If file list short, pad with dummy images
+            if len(listOfFiles) < self.settings['Duration'][0]:
+                for j in range(self.settings['Duration'][0]-len(listOfFiles)):
+                    listOfFiles.append('square_black.jpg')
+            listOfFiles.sort()
+            for i in range(self.settings['Duration'][0]):
+                file = listOfFiles[i]
+                if file == 'square_black.jpg':
+                    frame = 'NaN'
+                else:
+                    frame = file[file.find('Time')+4:file.find('.png')]
+                self.buttons[i].setStyleSheet(
+                    "background-image: url(%s)" % file)
+                text = frame + " Selected"
+                self.buttons[i].clicked.disconnect()
+                self.buttons[i].clicked.connect(
+                    lambda ch, text=text, i=i: self.select(text, i))
+                self.buttonLbl[i].setText(frame)
+                self.selectionLbl.setText(
+                    "Click image to select time frame")
 
     def replaceButtons(self):
         if self.selectionLbl.text() == "All stages selected" or "No mitosis":
@@ -169,31 +210,7 @@ class miApp(QWidget):
                 self.results.loc[self.results['Cell'] == int(self.cell),
                                  name] = float(self.selected[k].strip(' '))
             self.selected = []
-            # reset all buttons
-            for j in range(len(self.buttonSt)):
-                self.buttonSt[j] = False
-            listOfFiles = self.listFilesPerCell()
-            if listOfFiles:
-                # If file list short, pad with dummy images
-                if len(listOfFiles) < self.settings['Duration'][0]:
-                    for j in range(self.settings['Duration'][0]-len(listOfFiles)):
-                        listOfFiles.append('square_black.jpg')
-                listOfFiles.sort()
-                for i in range(self.settings['Duration'][0]):
-                    file = listOfFiles[i]
-                    if file == 'square_black.jpg':
-                        frame = 'NaN'
-                    else:
-                        frame = file[file.find('Time')+4:file.find('.png')]
-                    self.buttons[i].setStyleSheet(
-                        "background-image: url(%s)" % file)
-                    text = frame + " Selected"
-                    self.buttons[i].clicked.disconnect()
-                    self.buttons[i].clicked.connect(
-                        lambda ch, text=text, i=i: self.select(text, i))
-                    self.buttonLbl[i].setText(frame)
-                    self.selectionLbl.setText(
-                        "Click image to select time frame")
+            self.reset_all_buttons()
 
     def noMitosisButton(self):
         self.selectionLbl.setText("No mitosis")
@@ -219,11 +236,6 @@ class miApp(QWidget):
             self.results.to_csv('Image_%s_Results.csv' % self.imageId,
                                 index=False)
             self.showOutputWindow()
-            #mbox = QMessageBox()
-            #mbox.setText("All cells analysed for image %s!" % self.imageId)
-            #mbox.setDetailedText(self.results.to_string())
-            #mbox.setStandardButtons(QMessageBox.Ok)
-            #mbox.exec_()
         else:
             listOfFiles = []
             return listOfFiles
@@ -233,7 +245,7 @@ class miApp(QWidget):
         self.w.show()
 
     def processImage(self):
-        self.imageId = self.imageEdt.text()
+        self.imageId = self.imageEdt.currentText()
         self.progress.show()
         self.progress.setValue(0)
         try:
@@ -276,7 +288,7 @@ class miApp(QWidget):
         else:
             frame = text.partition("Selected")[0]
             self.buttonLbl[j].setText(text)
-            self.selected.concat(frame)
+            self.selected.append(frame)
             self.selected.sort()
             self.buttonSt[j] = True
         if self.selected:
