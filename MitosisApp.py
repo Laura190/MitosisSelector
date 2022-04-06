@@ -104,7 +104,8 @@ class miApp(QWidget):
         self.grid.addWidget(browse, 0, 5, 1, 4)
 
     def getFile(self):
-        self.file = str(QFileDialog.getOpenFileName())
+        self.file, _ = QFileDialog.getOpenFileName(None, 'Single File')
+        print(self.file)
         try:
             os.mkdir('tmp')
         except OSError as e:
@@ -118,8 +119,18 @@ class miApp(QWidget):
                 raise
         copy('Settings.csv', self.folder+'/Settings.csv')
         self.defaults = pd.read_csv(self.folder+'/Settings.csv')
-        df, sizeX, sizeY, scaleX, maxPrj, maxZPrj = MitFunc.pullLocal(
+        self.df, sizeX, sizeY, scaleX, maxPrj, maxZPrj = MitFunc.pullLocal(
             self.file, self.defaults['Stages'][0])
+        box_size = 2*np.ceil(self.defaults['Nuclei Diameter'][0]/scaleX)
+        self.df = MitFunc.find_rois(self.df, maxPrj, sizeX, sizeY, box_size)
+        self.progress.setValue(95)
+        self.progressLbl.setText("Saving ROIs")
+        self.progressLbl.repaint()
+        # TO DO: save ROIS to text file
+        MitFunc.rois_to_pngs(
+            self.df, maxZPrj, self.settings['Duration'][0])
+        self.progress.setValue(100)
+        self.progressLbl.setText("Processing Finished")
 
     def showSettingsWindow(self):
         self.w = settingsWindow()
