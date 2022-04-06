@@ -105,7 +105,8 @@ class miApp(QWidget):
 
     def getFile(self):
         self.file = str(QFileDialog.getOpenFileName())
-        print('process ', self.file)
+        df, sizeX, sizeY, scaleX, maxPrj, maxZPrj = MitFunc.pullLocal(
+            self.file)
 
     def showSettingsWindow(self):
         self.w = settingsWindow()

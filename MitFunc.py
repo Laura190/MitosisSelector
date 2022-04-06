@@ -8,7 +8,7 @@ from skimage.filters import threshold_yen
 from skimage.morphology import closing, square
 from skimage.segmentation import clear_border
 from skimage.measure import label, regionprops
-from skimage.io import imsave
+from skimage.io import imsave, imread
 # Data
 import numpy as np
 import pandas as pd
@@ -81,6 +81,22 @@ def pullOMERO(username, password, server, imageId, channel, stages):
         return df, sizeX, sizeY, scaleX, maxPrj, maxZPrj, image
     except Exception as e:
         print(e)
+
+
+def pullLocal(file):
+    sizeX = float(input("sizeX: ") or "1")
+    sizeY = float(input("sizeY: ") or "1")
+    scaleX = float(input("scaleX: ") or "1")
+    colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
+    colNames = colNames + stages.split(',')
+    df = pd.DataFrame(columns=colNames)
+    image = imread(file)
+    if len(image.shape) != 4:
+        print("Image must have 4 dimensions")
+    else:
+        maxZPrj = np.max(image, axis=1)
+        maxPrj = np.max(maxZPrj, axis=0)
+    return df, sizeX, sizeY, scaleX, maxPrj, maxZPrj
 
 
 def find_rois(df, maxPrj, sizeX, sizeY, box_size):
