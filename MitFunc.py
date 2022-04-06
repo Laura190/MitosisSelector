@@ -83,10 +83,11 @@ def pullOMERO(username, password, server, imageId, channel, stages):
         print(e)
 
 
-def pullLocal(file):
-    sizeX = float(input("sizeX: ") or "1")
-    sizeY = float(input("sizeY: ") or "1")
-    scaleX = float(input("scaleX: ") or "1")
+def pullLocal(file, stages):
+    #sizeX = float(input("sizeX: ") or "1")
+    #sizeY = float(input("sizeY: ") or "1")
+    #scaleX = float(input("scaleX: ") or "1")
+    # Pull info from image metadata?
     colNames = ['Cell', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
     colNames = colNames + stages.split(',')
     df = pd.DataFrame(columns=colNames)
@@ -96,7 +97,8 @@ def pullLocal(file):
     else:
         maxZPrj = np.max(image, axis=1)
         maxPrj = np.max(maxZPrj, axis=0)
-    return df, sizeX, sizeY, scaleX, maxPrj, maxZPrj
+    return df, 1, 1, 1, maxPrj, maxZPrj
+    #return df, sizeX, sizeY, scaleX, maxPrj, maxZPrj
 
 
 def find_rois(df, maxPrj, sizeX, sizeY, box_size):

@@ -105,8 +105,21 @@ class miApp(QWidget):
 
     def getFile(self):
         self.file = str(QFileDialog.getOpenFileName())
+        try:
+            os.mkdir('tmp')
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        self.folder = "tmp/Image_"+os.path.basename(self.file)
+        try:
+            os.mkdir(self.folder)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        copy('Settings.csv', self.folder+'/Settings.csv')
+        self.defaults = pd.read_csv(self.folder+'/Settings.csv')
         df, sizeX, sizeY, scaleX, maxPrj, maxZPrj = MitFunc.pullLocal(
-            self.file)
+            self.file, self.defaults['Stages'][0])
 
     def showSettingsWindow(self):
         self.w = settingsWindow()
