@@ -16,6 +16,7 @@ Required packages:
 - omero-py
 - scikit-image
 - pyqt5
+- pandas
 
 ## Usage
 
