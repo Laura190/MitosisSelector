@@ -10,6 +10,7 @@ import numpy as np
 import MitFunc
 import settingsWindow
 import outputWindow
+import manualWindow
 
 
 class miApp(QWidget):
@@ -60,6 +61,9 @@ class miApp(QWidget):
         # Run Button
         runBtn = QPushButton('Run')
         runBtn.clicked.connect(self.processImage)
+        # Manual Button
+        manBtn = QPushButton('Manual')
+        manBtn.clicked.connect(self.show_manual_window)
         # Next Button
         nextBtn = QPushButton('Next')
         nextBtn.clicked.connect(self.replaceButtons)
@@ -85,12 +89,13 @@ class miApp(QWidget):
         self.grid.addWidget(self.progress, 2, 4, 1, 5)
         self.grid.addWidget(self.progressLbl, 3, 4, 1, 5)
         self.grid.addWidget(runBtn, 4, 4, 1, 5)
+        self.grid.addWidget(manBtn, 5, 4, 1, 5)
         self.progress.hide()
         self.rerun = False
         rows = self.createButtons()
-        self.grid.addWidget(self.selectionLbl, rows+4, 4, 1, 5)
-        self.grid.addWidget(nextBtn, rows+5, 4, 1, 5)
-        self.grid.addWidget(noMit, rows+5, 3, 1, 1)
+        self.grid.addWidget(self.selectionLbl, rows+5, 4, 1, 5)
+        self.grid.addWidget(nextBtn, rows+6, 4, 1, 5)
+        self.grid.addWidget(noMit, rows+6, 3, 1, 1)
         self.grid.addWidget(browse, 0, 5, 1, 4)
 
     def getFile(self):
@@ -124,6 +129,19 @@ class miApp(QWidget):
 
     def showSettingsWindow(self):
         self.w = settingsWindow.settingsWindow()
+        self.w.show()
+
+    def show_manual_window(self):
+        setting = dict()
+        setting['imageId'] = self.imageEdt.currentText()
+        setting['user'] = self.userEdt.text()
+        setting['pw'] = self.pwEdt.text()
+        setting['server'] = self.serverEdt.text()
+        self.folder = "tmp/Image_" + self.imageId
+        self.defaults = pd.read_csv(self.folder+'/Settings.csv')
+        setting['channel'] = self.defaults['Channel'][0]
+        setting['stages'] = self.defaults['Stages'][0]
+        self.w = manualWindow.manualWindow(setting)
         self.w.show()
 
     def createButtons(self):
