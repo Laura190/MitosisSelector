@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import MitFunc
 import settingsWindow
+import outputWindow
 
 
 class miApp(QWidget):
@@ -122,7 +123,7 @@ class miApp(QWidget):
         self.progressLbl.setText("Processing Finished")
 
     def showSettingsWindow(self):
-        self.w = settingsWindow()
+        self.w = settingsWindow.settingsWindow()
         self.w.show()
 
     def createButtons(self):
@@ -255,7 +256,7 @@ class miApp(QWidget):
             return listOfFiles
 
     def showOutputWindow(self):
-        self.w = outputWindow()
+        self.w = outputWindow.outputWindow()
         self.w.show()
 
     def processImage(self):
